@@ -1,0 +1,15 @@
+# Credentials (NEVER commit)
+firebase-credentials_prod.json
+*.json
+secrets.env
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+# Local data
+firestore_copy/
+*.log
+# IDE
+.vscode/
+.idea/
