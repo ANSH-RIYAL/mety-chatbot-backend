@@ -1,15 +1,53 @@
-# Credentials (NEVER commit)
-firebase-credentials_prod.json
-*.json
-secrets.env
 # Python
 __pycache__/
 *.py[cod]
-.venv/
+*$py.class
+*.so
+.Python
+env/
 venv/
-# Local data
-firestore_copy/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+
+# Environment variables and secrets
+secrets.env
+.env
+*.env
+firebase-credentials*.json
+credentials*.json
+
+# Logs
 *.log
+backend.log
+
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+final_frontend/node_modules/
+final_frontend/dist/
+final_frontend/.vite/
+
+# Firestore data (keep structure, but not all data)
+firestore_copy/**/*.json
+!firestore_copy/**/.gitkeep
+
+# Test artifacts
+tests/credentials_summary.txt
+
+# Temporary files
+*.tmp
+*.bak
+
+

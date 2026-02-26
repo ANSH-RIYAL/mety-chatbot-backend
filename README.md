@@ -1,62 +1,61 @@
-# Mety Chatbot Backend
+# Chatbot Assistant Platform
 
-FastAPI backend for the Mety Chatbot platform, deployed on GCP Cloud Run.
+FastAPI backend for the website chatbot assistant platform.
 
-## Live URL
+## Setup
 
-**Production:** https://mety-chatbot-api-172415469528.us-central1.run.app
+1. **Enable Firestore API** (if not already enabled):
+   - Visit: https://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=srs-creator-app
+   - Or use: `gcloud services enable firestore.googleapis.com --project=srs-creator-app`
 
-## Tech Stack
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-- **Framework:** FastAPI + Uvicorn
-- **Database:** Google Firestore
-- **LLM:** OpenAI GPT
-- **Hosting:** GCP Cloud Run
+3. **Environment variables**:
+   - `OPENAI_API_KEY` is loaded from `secrets.env`
+   - `FIRESTORE_CREDENTIALS` defaults to `firebase-credentials_prod.json`
+   - `LIFESPAN_API_URL` defaults to the production API URL
+
+## Running
+
+```bash
+python app.py
+```
+
+Or with uvicorn:
+```bash
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+```
 
 ## API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/health/metrics` | GET | System metrics |
-| `/plan/get` | GET | Get user's plan |
-| `/plan/update` | POST | Update user's plan |
-| `/chat/message` | POST | Send chat message |
-| `/onboarding/submit` | POST | Submit onboarding data |
+- `GET /health` - Health check
+- `POST /onboarding/submit` - Submit onboarding page data
+- `GET /plan/get?user_id=<id>` - Get user plans
+- `POST /plan/update` - Update target plan with diff
+- `POST /log/submit` - Submit log and calculate adherence
+- `POST /lifespan/predict` - Predict lifespan and risk ratios
+- `POST /chat` - Main chat orchestration endpoint
+- `GET /user/vars?user_id=<id>` - Get user vars_extracted and target_plan
 
-## Local Development
+## Testing
 
+Run the test scripts:
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables
-export OPENAI_API_KEY=your-key
-
-# Run server
-python -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+python tests/test_api.py
+python tests/test_pipeline.py
+python tests/test_firestore.py
 ```
 
-## CI/CD
+Make sure the server is running on `localhost:8000` first.
 
-Auto-deploys to Cloud Run on push to `main` via GitHub Actions.
+## Documentation
 
-**Required Secrets:**
-- `GCP_SA_KEY` - Service account JSON
-- `GCP_PROJECT_ID` - GCP project ID
-- `GCP_REGION` - Deployment region
+See `docs/` directory for:
+- `common_document.md` - System overview and shared schemas
+- `backend_document.md` - Backend routes and implementation details
+- `frontend_document.md` - Frontend pages and components
+- `test_everything_manually.md` - Manual testing procedures
 
-## Project Structure
-
-```
-├── app.py              # FastAPI application
-├── config.py           # Configuration
-├── Dockerfile          # Container config
-├── requirements.txt    # Dependencies
-└── services/
-    ├── firestore_service.py   # Database operations
-    ├── llm_service.py         # OpenAI integration
-    ├── prediction_api.py      # Lifespan prediction
-    ├── adherence.py           # Adherence calculations
-    └── metrics_service.py     # System metrics
-```
