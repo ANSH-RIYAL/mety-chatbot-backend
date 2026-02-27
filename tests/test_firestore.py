@@ -5,11 +5,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 from datetime import datetime
 from google.cloud import firestore
-from google.oauth2 import service_account
 
 """
-This is where we need to define the Firestore schema in comments.
-
 Firestore Schema:
 - Collection: users
   Document ID: <user_id>
@@ -48,9 +45,23 @@ Firestore Schema:
     - timestamp: ISO timestamp string
 """
 
+# =====================================================
+# Connect to Firestore - works locally AND on Cloud Run
+# =====================================================
+
 credentials_path = "firebase-credentials_prod.json"
-credentials = service_account.Credentials.from_service_account_file(credentials_path)
-db = firestore.Client(credentials=credentials, project=credentials.project_id)
+
+if os.path.exists(credentials_path):
+    # Local development: use JSON credentials file
+    from google.oauth2 import service_account
+    print(f"Using credentials file: {credentials_path}")
+    credentials = service_account.Credentials.from_service_account_file(credentials_path)
+    db = firestore.Client(credentials=credentials, project=credentials.project_id)
+else:
+    # Cloud Run / GCP: use Application Default Credentials
+    project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "srs-creator-app"
+    print(f"No credentials file found. Using Application Default Credentials with project: {project_id}")
+    db = firestore.Client(project=project_id)
 
 collections = ["users", "chat_history", "plans_history", "logs"]
 
@@ -124,4 +135,3 @@ if chat_query:
     print(f"✓ Queried chat_history: found {len(chat_query)} document(s)")
 
 print("\nAll Firestore tests passed! ✓")
-

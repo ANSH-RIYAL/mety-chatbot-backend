@@ -119,19 +119,6 @@ class ChatRequest(BaseModel):
 
 
 def _ensure_user_exists(user_id: str) -> None:
-    """
-    Ensures a user document exists in Firestore, creating one if it doesn't.
-    
-    When creating a new user, initializes the document with:
-    - Empty profile dictionary
-    - Empty current_plan and target_plan (users start with no plan values)
-    - optimal_plan populated with optimal values from config
-    - Empty vars_extracted dictionary
-    - Current timestamp for last_updated
-    
-    If the user already exists, checks if current_plan or target_plan contain
-    optimal values (which shouldn't be there) and removes them to ensure clean state.
-    """
     user = firestore_service.get_user(user_id)
     if not user:
         base_plan = {var: 0.0 for var in config.CANONICAL_VARIABLES}
@@ -171,26 +158,33 @@ def health():
     return {"status": "ok", "service": "Chatbot Assistant Platform"}
 
 
+@app.get("/debug/firestore")
+def debug_firestore():
+    """Check Firestore connection status - use this to diagnose issues on deployed URL."""
+    result = {
+        "firestore_enabled": firestore_service.firestore_enabled,
+        "credentials_file_path": config.FIRESTORE_CREDENTIALS,
+        "credentials_file_exists": os.path.exists(config.FIRESTORE_CREDENTIALS),
+        "env_GCP_PROJECT_ID": os.getenv("GCP_PROJECT_ID", "NOT SET"),
+        "env_GOOGLE_CLOUD_PROJECT": os.getenv("GOOGLE_CLOUD_PROJECT", "NOT SET"),
+        "env_GOOGLE_APPLICATION_CREDENTIALS": os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "NOT SET"),
+    }
+    
+    if firestore_service.firestore_enabled and firestore_service.db:
+        try:
+            collections = [c.id for c in firestore_service.db.collections()]
+            result["connection_test"] = "SUCCESS"
+            result["collections_found"] = collections
+        except Exception as e:
+            result["connection_test"] = f"FAILED: {str(e)}"
+    else:
+        result["connection_test"] = "SKIPPED - Firestore not enabled"
+    
+    return result
+
+
 @app.post("/onboarding/submit")
 def onboarding_submit(request: OnboardingRequest):
-    """
-    Handles submission of onboarding page data from the frontend.
-    
-    This endpoint processes data from any of the four onboarding pages:
-    - About Me: name, age, gender, stress_quality, sleep_quality
-    - My Supplements: all supplement-related variables
-    - My Diet: all diet-related variables
-    - My Exercise: exercise and lifestyle variables
-    
-    The function separates profile data (name, age, gender) from plan variables.
-    Profile data is merged into the user's profile field, while plan variables
-    are saved to current_plan. This allows the user's initial values to be
-    stored as their current plan, which can then be compared to optimal and
-    used as a baseline for target plan creation.
-    
-    Note: sleep_quality and stress_quality are removed from plan data as they
-    are profile-only variables, not plan variables.
-    """
     _ensure_user_exists(request.user_id)
     payload_dict = request.payload.dict(exclude_none=True)
     payload_dict.pop("sleep_quality", None)
@@ -219,22 +213,6 @@ def onboarding_submit(request: OnboardingRequest):
 
 @app.get("/plan/get")
 def plan_get(user_id: str = Query(...)):
-    """
-    Retrieves all three plan types for a user: current, target, and optimal.
-    
-    This endpoint ensures that all plans are returned with all canonical variables
-    present, even if they weren't explicitly set. The logic works as follows:
-    
-    1. Creates a base plan with all canonical variables set to 0
-    2. For current_plan and target_plan: overlays only the stored non-zero values
-    3. For optimal_plan: overlays the optimal values from config
-    
-    This ensures the frontend always receives complete plans with all 42 variables,
-    making it easy to display them in tables and forms without missing variables.
-    
-    The stored plans in Firestore only contain non-zero values to save space,
-    but this endpoint expands them to full plans for frontend consumption.
-    """
     _ensure_user_exists(user_id)
     user = firestore_service.get_user(user_id)
     optimal_plan = user.get("optimal_plan", config.OPTIMAL_PLAN) if user else config.OPTIMAL_PLAN.copy()
@@ -251,49 +229,19 @@ def plan_get(user_id: str = Query(...)):
             target_plan_full[key] = float(value)
     optimal_plan_full = base_plan.copy()
     optimal_plan_full.update(optimal_plan)
-    
-    # return {
-    #     "user_id": user_id,
-    #     "current_plan": current_plan_full,
-    #     "target_plan": target_plan_full,
-    #     "optimal_plan": optimal_plan_full,
-    #     "last_updated": user.get("last_updated", datetime.utcnow().isoformat()) if user else datetime.utcnow().isoformat()
-    # }
 
     return {
-    "user_id": user_id,
-
-    # ✅ ADD THIS LINE
-    "profile": user.get("profile", {}) if user else {},
-
-    "current_plan": current_plan_full,
-    "target_plan": target_plan_full,
-    "optimal_plan": optimal_plan_full,
-    "last_updated": user.get("last_updated", datetime.utcnow().isoformat()) if user else datetime.utcnow().isoformat()
-}
+        "user_id": user_id,
+        "profile": user.get("profile", {}) if user else {},
+        "current_plan": current_plan_full,
+        "target_plan": target_plan_full,
+        "optimal_plan": optimal_plan_full,
+        "last_updated": user.get("last_updated", datetime.utcnow().isoformat()) if user else datetime.utcnow().isoformat()
+    }
 
 
 @app.post("/plan/update")
 def plan_update(request: PlanUpdateRequest):
-    """
-    Updates the user's target plan by applying a diff of variable changes.
-    
-    This endpoint accepts a diff object containing only the variables that should
-    be changed. The function:
-    
-    1. Validates that all keys in the diff exist in the canonical variable schema
-    2. Merges the diff with the existing target_plan (preserving other values)
-    3. Converts all values to floats for consistency
-    4. Saves only non-zero values to Firestore (to keep storage efficient)
-    5. Logs the change to plans_history for audit trail
-    
-    The response includes the full new_target_plan (with all variables) and the
-    applied_diff for frontend confirmation. This allows the frontend to update
-    its UI with the complete plan state.
-    
-    Unknown keys in the diff result in a 400 error with details about which
-    keys were invalid.
-    """
     _ensure_user_exists(request.user_id)
     user = firestore_service.get_user(request.user_id)
     unknown_keys = [k for k in request.diff.keys() if k not in config.CANONICAL_VARIABLES]
@@ -392,35 +340,14 @@ def chat_clear(user_id: str = Query(...)):
 
 @app.post("/log/submit")
 def log_submit(request: LogSubmitRequest):
-    """
-    Submits a log entry with actual values the user achieved over a time period.
-    
-    This endpoint accepts logged values (what the user actually did) and compares
-    them against the target_plan to calculate adherence metrics. The log values
-    should represent average daily intake over the period, not total values.
-    
-    The adherence calculation computes:
-    - diet_adherence: Mean ratio of logged/target for diet variables
-    - supplement_adherence: Mean ratio of logged/target for supplement variables
-    - total_adherence: Overall mean of all adherence ratios
-    
-    All ratios are capped at 1.0 (100%) to prevent over-adherence. The adherence
-    metrics are stored with the log entry in Firestore and returned to the frontend
-    for display to the user.
-    
-    The log entry includes the period_start and period_end dates, allowing users
-    to track adherence over different time periods and see progress over time.
-    """
     _ensure_user_exists(request.user_id)
     user = firestore_service.get_user(request.user_id)
-    # Expand target_plan to include all canonical variables (like /plan/get does)
     stored_target = user.get("target_plan", {}) if user else {}
     base_plan = {var: 0.0 for var in config.CANONICAL_VARIABLES}
     target_plan = base_plan.copy()
     for key, value in stored_target.items():
         if key in config.CANONICAL_VARIABLES:
             target_plan[key] = float(value) 
-    # target_plan = user.get("target_plan", {}) if user else {} 
     adherence = calculate_adherence(request.log, target_plan)
     log_id = firestore_service.save_log(
         request.user_id,
@@ -449,35 +376,6 @@ def lifespan_predict(request: LifespanPredictRequest):
 
 @app.post("/chat")
 def chat(request: ChatRequest):
-    """
-    Main chat orchestration endpoint that handles all conversational interactions.
-    
-    This is the core endpoint that coordinates multiple services to provide
-    intelligent chat responses. The processing flow:
-    
-    1. Persists the new user message to chat_history
-    2. Fetches previous chat history from Firestore for context
-    3. Extracts variables from the last 2 user messages using LLM
-    4. Creates a diff comparing extracted variables to current target plan
-    5. Updates vars_extracted in user document for tracking
-    6. Extracts constraints from conversation using LLM
-    7. Generates suggested plan diffs using LLM with constraints
-    8. Calls lifespan prediction API with suggested plan
-    9. Generates assistant reply using LLM with full context
-    10. Persists assistant message to chat_history
-    11. Builds actions array for frontend (e.g., ask_apply_change)
-    
-    The endpoint receives only the latest message from frontend, but automatically
-    fetches full conversation history from Firestore. This allows the frontend to
-    be stateless while maintaining conversation context.
-    
-    The suggested_plan returned is a diff that should be applied to the combined
-    (target + current) plan, not a complete plan. The frontend applies this diff
-    to show recommendations.
-    
-    If auto_apply_extracted_vars is true, the frontend handles applying variables
-    automatically; otherwise, an ask_apply_change action is returned for user confirmation.
-    """
     _ensure_user_exists(request.user_id)
     user = firestore_service.get_user(request.user_id)
     firestore_service.persist_chat_message(
@@ -642,8 +540,9 @@ def user_vars(user_id: str = Query(...)):
         "vars_extracted": user.get("vars_extracted", {}) if user else {},
         "target_plan": user.get("target_plan", {}) if user else {}
     }
+
 API_PREFIXES = (
-    "health", "onboarding", "plan", "chat", "log", "lifespan", "user"
+    "health", "debug", "onboarding", "plan", "chat", "log", "lifespan", "user"
 )
 
 @app.get("/{path:path}")
@@ -659,4 +558,3 @@ def spa_fallback(path: str):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
