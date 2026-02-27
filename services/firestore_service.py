@@ -17,17 +17,24 @@ class FirestoreService:
             print("Looking for Firestore credentials at:", config.FIRESTORE_CREDENTIALS)
             print("Absolute path:", os.path.abspath(config.FIRESTORE_CREDENTIALS))
 
-            if not os.path.exists(config.FIRESTORE_CREDENTIALS):
-                raise FileNotFoundError(f"Credentials file not found: {config.FIRESTORE_CREDENTIALS}")
+            if os.path.exists(config.FIRESTORE_CREDENTIALS):
+                # Local development: use the JSON credentials file
+                print("[FIRESTORE] Using credentials file")
+                credentials = service_account.Credentials.from_service_account_file(
+                    config.FIRESTORE_CREDENTIALS
+                )
+                self.db = firestore.Client(
+                    credentials=credentials,
+                    project=credentials.project_id
+                )
+            else:
+                # Cloud Run / GCP: use Application Default Credentials (no file needed)
+                project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "srs-creator-app"
+                print(f"[FIRESTORE] No credentials file found. Using Application Default Credentials with project: {project_id}")
+                self.db = firestore.Client(project=project_id)
             
-            credentials = service_account.Credentials.from_service_account_file(
-                config.FIRESTORE_CREDENTIALS
-            )
-            self.db = firestore.Client(
-                credentials=credentials,
-                project=credentials.project_id
-            )
             self.firestore_enabled = True
+            print("[FIRESTORE] Connection successful!")
         except Exception as e:
             self.db = None
             self.firestore_enabled = False
@@ -306,4 +313,3 @@ class FirestoreService:
 
 
 firestore_service = FirestoreService()
-
