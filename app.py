@@ -80,6 +80,10 @@ class OnboardingPayload(BaseModel):
     sauna_duration: Optional[float] = None
     sauna_frequency: Optional[float] = None
     water: Optional[float] = None
+    fat_trans: Optional[float] = None
+    sleep_duration: Optional[float] = None
+    calorie_restriction: Optional[float] = None
+
 
 
 class OnboardingRequest(BaseModel):
