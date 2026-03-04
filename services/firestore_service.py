@@ -28,11 +28,11 @@ class FirestoreService:
                     project=credentials.project_id
                 )
             else:
-                # Cloud Run / GCP: use Application Default Credentials (no file needed)
-                project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "srs-creator-app"
+                # Cloud Run: use Application Default Credentials with chatbot-display project
+                project_id = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "chatbot-display"
                 print(f"[FIRESTORE] No credentials file found. Using Application Default Credentials with project: {project_id}")
                 self.db = firestore.Client(project=project_id)
-            
+
             self.firestore_enabled = True
             print("[FIRESTORE] Connection successful!")
         except Exception as e:
@@ -313,3 +313,5 @@ class FirestoreService:
 
 
 firestore_service = FirestoreService()
+
+ //
