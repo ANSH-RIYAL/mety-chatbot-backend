@@ -313,5 +313,3 @@ class FirestoreService:
 
 
 firestore_service = FirestoreService()
-
- //
