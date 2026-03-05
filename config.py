@@ -129,7 +129,11 @@ Configuration and constants for METY Chatbot Backend
 
 import os
 from typing import Dict, Any
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    def load_dotenv(*args, **kwargs):
+        return False
 
 # ---------------------------------------------------
 # Load environment variables (optional support)
@@ -139,15 +143,15 @@ load_dotenv("secrets.env")
 load_dotenv(".env")
 
 # ---------------------------------------------------
-# 🔐 OPENAI CONFIG (INLINE KEY - TEMPORARY)
+# OPENAI CONFIG
 # ---------------------------------------------------
 
-# ⚠️ You are intentionally keeping it inline for now.
-# Replace with env variable later before production.
-os.getenv("OPENAI_API_KEY")
+# FIX: Actually assign the env variable to a module-level attribute
+OPENAI_API_KEY = (os.getenv("OPENAI_API_KEY") or "").strip()
 
 # Ensure it is available in os.environ for other modules
-# os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+if OPENAI_API_KEY:
+    os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
 
 # ---------------------------------------------------
